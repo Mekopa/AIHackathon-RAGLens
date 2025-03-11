@@ -1,6 +1,6 @@
-#dochub/urls.py
+# dochub/urls.py
 
-from django.urls import path
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 
@@ -13,6 +13,10 @@ urlpatterns = [
     path('graph/document/<uuid:document_id>/', views.document_graph, name='document-graph'),
     path('graph/folder/<uuid:folder_id>/', views.folder_graph, name='folder-graph'),
     path('graph/entity/', views.entity_graph, name='entity-graph'),
+    
+    # Bulk operations
+    path('bulk_delete/', views.BulkDeleteView.as_view(), name='bulk-delete'),
+    
+    # Include router URLs
+    path('', include(router.urls)),
 ]
-
-urlpatterns += router.urls

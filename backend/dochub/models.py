@@ -1,14 +1,41 @@
-#dochub/models.py
+# dochub/models.py
 
 import uuid
 from django.db import models
-from django.utils.text import slugify
 import os
 
+def build_folder_path(folder):
+    """
+    Recursively build the folder path based on hierarchy.
+    Always starts with Documents/
+    """
+    parts = []
+    current = folder
+    
+    # Build path starting from the deepest folder
+    while current:
+        parts.insert(0, current.name)
+        current = current.parent
+    
+    # Ensure it starts with Documents if not already
+    if not parts or parts[0] != "Documents":
+        parts.insert(0, "Documents")
+        
+    return os.path.join(*parts)
+
 def document_upload_path(instance, filename):
-    """Define upload path for documents"""
-    # Format: documents/<document_id>/<filename>
-    return os.path.join('documents', str(instance.id), filename)
+    """
+    Define upload path for documents within the Documents directory.
+    For root level: media/Documents/filename
+    For folders: media/Documents/FolderName/filename
+    """
+    if instance.folder:
+        # Get folder path
+        folder_path = build_folder_path(instance.folder)
+        return os.path.join(folder_path, filename)
+    else:
+        # Root level document goes directly in Documents folder
+        return os.path.join("Documents", filename)
 
 class Folder(models.Model):
     """Folder model for organizing documents"""
@@ -25,9 +52,10 @@ class Folder(models.Model):
     @property
     def path(self):
         """Get the full path of the folder"""
-        if self.parent:
-            return f"{self.parent.path}/{self.name}"
-        return self.name
+        return build_folder_path(self)
+    
+    class Meta:
+        ordering = ['name']
 
 class Document(models.Model):
     """Document model for storing files"""
@@ -51,15 +79,6 @@ class Document(models.Model):
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        # Set file_type based on file extension
-        if self.file:
-            ext = os.path.splitext(self.file.name)[1].lower()
-            self.file_type = ext[1:] if ext else ''  # Remove the dot from extension
-            
-            # Update file size if available
-            if self.file.size:
-                self.size = self.file.file.size
-                
-        super().save(*args, **kwargs)
+    
+    class Meta:
+        ordering = ['-created_at']
