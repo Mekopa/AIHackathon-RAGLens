@@ -1,0 +1,78 @@
+/* Base styles */
+:root {
+    --transition-duration: 200ms;
+  }
+  
+  /* Light theme (default) */
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --color-primary: #2563eb;
+    --color-deactivate: #000000;
+    --color-primary-hover: #1d4ed8;
+    --color-secondary: #4b5563;
+    --color-accent: #8b5cf6;
+    --color-background: #f9fafb;
+    --color-surface: #ffffff;
+    --color-text: #111827;
+    --color-text-secondary: #4b5563;
+    --color-border: #e5e7eb;
+    --color-input: #ffffff;
+    --color-input-border: #d1d5db;
+    --color-input-focus: #3b82f6;
+    --color-error: #ef4444;
+  }
+  
+  /* Dark theme */
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --color-primary: #3b82f6;
+    --color-deactivate: #983434;
+    --color-primary-hover: #2563eb;
+    --color-secondary: #9ca3af;
+    --color-accent: #a78bfa;
+    --color-background: #18191a;
+    --color-surface: #242526;
+    --color-text: #ffffff;
+    --color-text-secondary: #d1d5db;
+    --color-border: #262626;
+    --color-input: #171717;
+    --color-input-border: #404040;
+    --color-input-focus: #60a5fa;
+    --color-error: #f87171;
+  }
+  
+  /* Navy theme */
+  :root[data-theme='navy'] {
+    color-scheme: dark;
+    --color-primary: #3b82f6;
+    --color-deactivate: #2563eb;
+    --color-primary-hover: #2563eb;
+    --color-secondary: #9ca3af;
+    --color-accent: #a78bfa;
+    --color-background: #1f2937;
+    --color-surface: #111827;
+    --color-text: #f9fafb;
+    --color-text-secondary: #d1d5db;
+    --color-border: #374151;
+    --color-input: #374151;
+    --color-input-border: #4b5563;
+    --color-input-focus: #60a5fa;
+    --color-error: #f87171;
+  }
+  
+  /* Apply theme colors to the body */
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+  }
+  
+  /* Global transitions */
+  *,
+  *::before,
+  *::after {
+    transition: background-color var(--transition-duration) ease,
+      border-color var(--transition-duration) ease,
+      color var(--transition-duration) ease,
+      box-shadow var(--transition-duration) ease;
+  }
+  

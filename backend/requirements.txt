@@ -1,0 +1,27 @@
+# Django and REST framework
+django==5.0.2
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+python-dotenv==1.0.1
+
+# Database integrations
+psycopg2-binary==2.9.9  # PostgreSQL
+neo4j==5.17.0           # Neo4j
+
+# Document processing
+langchain==0.1.4
+langchain-openai==0.0.5
+chromadb==0.4.22
+openai==1.12.0
+
+# File handling
+python-magic==0.4.27
+Pillow==10.2.0
+
+# Background tasks
+celery==5.3.6
+redis==5.0.1
+
+# Utilities
+pdfminer.six==20231228
+docx2txt==0.8
