@@ -19,4 +19,5 @@ def main():
 
 
 if __name__ == '__main__':
+    print(f"\033[31;1mStarting process with a PID of {os.getpid()}\033[0m")
     main()

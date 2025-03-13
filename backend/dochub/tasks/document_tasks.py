@@ -36,7 +36,7 @@ def process_document_task(self, document_id):
     Returns:
         dict: Processing results
     """
-    logger.info(f"Starting document processing task for document {document_id}")
+    logger.info(f"[PID={os.getpid()}]Starting document processing task for document {document_id}")
     processing_start_time = time.time()
     
     try:

@@ -71,8 +71,8 @@ class DoclingExtractor(TextExtractor):
                 logger.info(f"Successfully extracted {len(text)} characters with docling")
                 return text
                 
-            except ImportError:
-                logger.warning("Docling not available, falling back to pdfminer")
+            except ImportError as e:
+                logger.warning(f"Docling not available, falling back to pdfminer {e}")
                 # Fall back to pdfminer
                 try:
                     import pdfminer.high_level
