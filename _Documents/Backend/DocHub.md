@@ -41,26 +41,64 @@ DocHub is built with Django and uses a modern tech stack:
 ```
 backend/
 ├── config/                  # Project configuration
+│   ├── __init__.py
+│   ├── asgi.py
+│   ├── celery.py            # Celery configuration
+│   ├── settings.py          # Django settings
+│   ├── urls.py              # Main URL routing
+│   └── wsgi.py
 ├── dochub/                  # Document management app
-│   ├── document_processor/  # Document processing pipeline
-│   │   ├── text_extractor.py
-│   │   ├── text_splitter.py
-│   │   ├── embedding_generator.py
-│   │   └── indexer.py
-│   ├── graph/               # Knowledge graph functionality
-│   │   ├── neo4j_client.py
-│   │   ├── schema_manager.py
-│   │   └── graph_generator.py
-│   ├── models.py            # Data models
-│   ├── serializers.py       # API serializers
-│   ├── views.py             # API views
-│   ├── urls.py              # URL routing
+│   ├── api/                 # API layer
+│   │   ├── __init__.py
+│   │   ├── serializers.py   # Data serializers
+│   │   ├── urls.py          # API endpoints
+│   │   └── views.py         # API views
+│   ├── management/          # Custom management commands
+│   │   └── commands/
+│   │       └── test_pipeline.py  # Pipeline testing command
+│   ├── models/              # Data models
+│   │   ├── __init__.py
+│   │   ├── document.py      # Document model
+│   │   └── folder.py        # Folder model
+│   ├── pipeline/            # Document processing pipeline
+│   │   ├── extractors/      # Text extraction
+│   │   │   ├── base.py      # Base extractor interface
+│   │   │   └── docling_extractor.py  # Implementation
+│   │   ├── splitters/       # Text splitting
+│   │   │   ├── base.py      # Base splitter interface
+│   │   │   └── langchain_splitter.py  # Implementation
+│   │   ├── embeddings/      # Embedding generation
+│   │   │   ├── base.py      # Base generator interface
+│   │   │   └── openai_embeddings.py  # Implementation
+│   │   ├── indexers/        # Vector indexing
+│   │   │   ├── base.py      # Base indexer interface
+│   │   │   └── chroma_indexer.py  # Implementation
+│   │   └── graphs/          # Knowledge graph generation
+│   │       ├── client.py    # Neo4j client
+│   │       ├── generator.py # Graph generator
+│   │       └── schema.py    # Schema manager
+│   ├── services/            # Business logic services
+│   │   ├── __init__.py
+│   │   ├── document_service.py  # Document processing service
+│   │   └── search_service.py    # Search functionality
+│   ├── tasks/               # Celery tasks
+│   │   ├── __init__.py
+│   │   └── document_tasks.py    # Document processing tasks
+│   ├── templates/           # HTML templates
+│   │   └── debug/
+│   │       └── test_dashboard.html  # Pipeline test dashboard
+│   ├── utils/               # Utility functions
+│   │   ├── pipeline_logger.py  # Pipeline testing logger
+│   │   └── graph_visualizer.py # Graph visualization utility
+│   ├── __init__.py
+│   ├── apps.py              # App configuration
 │   ├── signals.py           # Signal handlers
-│   ├── tasks.py             # Celery tasks
-│   └── apps.py              # App configuration
+│   ├── urls.py              # URL routing
+│   └── views.py             # Django views
 ├── chatbot/                 # Chatbot app with RAG capabilities
 ├── media/                   # Media storage
-│   └── Documents/           # Root folder for all documents
+│   ├── Documents/           # Root folder for all documents
+│   └── pipeline_tests/      # Pipeline test artifacts
 └── utils/                   # Shared utilities
 ```
 
@@ -449,7 +487,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ## Testing
 
-### Manual Testing with cURL
+### API Testing with cURL
 
 Test the folder creation:
 ```bash
@@ -466,11 +504,96 @@ curl -X POST http://localhost:8000/api/dochub/documents/ \
   -F "folder=folder-uuid-from-previous-step"
 ```
 
-### Automated Testing
+### Pipeline Testing Framework
 
-Run the test suite:
+The system includes a comprehensive pipeline testing framework:
+
+#### Pipeline Logger
+
+The `PipelineLogger` class in `dochub/utils/pipeline_logger.py` captures detailed information during pipeline execution:
+
+```python
+class PipelineLogger:
+    def __init__(self, document_id, log_level=logging.DEBUG, save_artifacts=True):
+        self.document_id = str(document_id)
+        self.log_level = log_level
+        self.save_artifacts = save_artifacts
+        self.metrics = {}
+        self.step_times = {}
+        
+        if self.save_artifacts:
+            self.artifact_dir = Path(settings.MEDIA_ROOT) / 'pipeline_tests' / self.document_id
+            os.makedirs(self.artifact_dir, exist_ok=True)
+    
+    def log_step(self, step_name):
+        """Decorator to log and time a pipeline step"""
+        # Implementation details...
+```
+
+Key features:
+- Step timing and performance metrics
+- Artifact saving for detailed analysis
+- Detailed logging of each processing step
+- OpenAI API request/response tracking
+
+#### Test Command
+
+The custom management command `test_pipeline` in `dochub/management/commands/test_pipeline.py` allows running the pipeline with detailed logging:
+
+```bash
+# Basic test
+python manage.py test_pipeline <document_id>
+
+# Detailed test with artifact saving
+python manage.py test_pipeline <document_id> --verbose --save-artifacts
+
+# Specify OpenAI model for graph generation
+python manage.py test_pipeline <document_id> --openai-model=gpt-4o-mini
+```
+
+This command provides real-time feedback on the pipeline's performance and can save intermediate artifacts for analysis.
+
+#### Test Dashboard
+
+The test dashboard at `/dochub/test-dashboard/<document_id>/` displays detailed pipeline results:
+
+- Document information and metadata
+- Step-by-step performance metrics
+- Text extraction results and statistics
+- Chunk information with token counts
+- Embedding visualizations
+- Knowledge graph visualization
+- API calls and responses
+
+#### Using the Testing Framework
+
+To test a document through the pipeline:
+
+1. Upload a document using the API or frontend
+2. Note the document UUID
+3. Run the test command:
+   ```bash
+   python manage.py test_pipeline <document-uuid> --verbose --save-artifacts
+   ```
+4. View the results in the dashboard:
+   ```
+   http://localhost:8000/dochub/test-dashboard/<document-uuid>/
+   ```
+
+### Automated Unit Testing
+
+Run the Django test suite:
 ```bash
 python manage.py test dochub
+```
+
+For testing specific components:
+```bash
+# Test extractors
+python manage.py test dochub.tests.test_extractors
+
+# Test the entire pipeline
+python manage.py test dochub.tests.test_pipeline
 ```
 
 ## Troubleshooting
@@ -490,6 +613,7 @@ python manage.py test dochub
 3. Ensure the directory structure exists:
    ```bash
    mkdir -p media/Documents
+   mkdir -p media/pipeline_tests
    ```
 
 #### Celery Not Processing Tasks
@@ -506,7 +630,51 @@ python manage.py test dochub
    ```bash
    celery -A config worker --loglevel=info
    ```
+4. Run the cleanup task to fix stuck documents:
+   ```python
+   from dochub.tasks.document_tasks import cleanup_processing_documents
+   cleanup_processing_documents.delay()
+   ```
 
+#### Pipeline Component Failures
+
+**Problem**: Document processing fails in a specific pipeline stage.
+
+**Solutions by component**:
+
+1. **Text Extraction Issues**:
+   - Check file format support
+   - Verify file is not corrupted or password protected
+   - For PDFs, check if OCR is needed for scanned documents
+   - Try reprocessing using the test command:
+     ```bash
+     python manage.py test_pipeline <document-id> --verbose
+     ```
+
+2. **Embedding Generation Issues**:
+   - Verify OpenAI API key is valid and has sufficient quota
+   - Check for rate limiting errors in logs
+   - Try with a smaller chunk size or different model:
+     ```bash
+     # In openai_embeddings.py
+     EMBEDDING_MODEL = "text-embedding-ada-002"  # Change if needed
+     ```
+
+3. **ChromaDB Indexing Issues**:
+   - Check that ChromaDB is properly initialized
+   - Verify persistence directory exists and is writable
+   - If database is corrupted, you may need to reset it:
+     ```bash
+     # Back up first!
+     rm -rf backend/chroma_db/*
+     ```
+
+4. **Graph Generation Issues**:
+   - Check Neo4j connection parameters
+   - Verify Neo4j is running and accessible
+   - Check OpenAI API errors in logs
+   - Try with a simpler model like gpt-3.5-turbo if rate limited
+   
 #### Database Migration Errors
 
 **Problem**: Migrations fail with errors.
@@ -521,24 +689,189 @@ python manage.py test dochub
    python manage.py migrate dochub
    ```
 
+### Debug Tools
+
+#### Pipeline Logger
+
+When troubleshooting pipeline issues, use the pipeline logger to capture detailed information:
+
+```python
+from dochub.utils.pipeline_logger import PipelineLogger
+
+logger = PipelineLogger(document_id='your-doc-id', save_artifacts=True)
+
+@logger.log_step("extraction")
+def test_extraction(file_path):
+    # Your extraction code here
+    pass
+```
+
+#### Test Dashboard
+
+The test dashboard provides visual insights into pipeline failures:
+```
+http://localhost:8000/dochub/test-dashboard/<document-id>/
+```
+
+#### Manual Step Testing
+
+You can test individual pipeline components manually:
+
+```python
+from django.core.management import call_command
+
+# Test with verbose output and artifact saving
+call_command('test_pipeline', 'document-id', verbose=True, save_artifacts=True)
+```
+
 ### Logs
 
-Check the Django development server logs and Celery worker logs for errors.
+Check the following logs for troubleshooting:
 
-Additionally, check the `debug.log` file in the backend directory.
+1. **Django Server Logs**: Output from the Django development server
+2. **Celery Worker Logs**: Output from the Celery worker process
+3. **Pipeline Test Logs**: Saved in `media/pipeline_tests/<document_id>/`
+4. **debug.log**: Application-wide logging in the backend directory
+
+For real-time logging, run the server and worker with increased verbosity:
+
+```bash
+# Django with debug output
+python manage.py runserver --verbosity 2
+
+# Celery with debug output
+celery -A config worker --loglevel=debug
+```
 
 ## Document Processing Flow
 
+### Overview
+
 When a document is uploaded:
 
-1. The `post_save` signal triggers `process_document_task`
-2. The task extracts text from the document
-3. The text is split into chunks
-4. Embeddings are generated for each chunk
-5. Chunks and embeddings are stored in ChromaDB
-6. Entities and relationships are extracted
-7. A knowledge graph is built in Neo4j
-8. The document status is updated to 'ready'
+1. The `post_save` signal in `signals.py` triggers `process_document_task`
+2. The task orchestrates the document processing pipeline:
+   - Extracts text from the document
+   - Splits text into manageable chunks
+   - Generates embeddings for each chunk
+   - Indexes chunks and embeddings in ChromaDB
+   - Extracts entities and relationships
+   - Builds a knowledge graph in Neo4j
+3. The document status is updated to 'ready' upon successful processing
+
+### Pipeline Architecture
+
+The document processing pipeline is implemented with a modular architecture following clear interfaces:
+
+```
+dochub/
+├── pipeline/                  # Processing pipeline components
+│   ├── extractors/            # Text extraction
+│   │   ├── base.py            # Base extractor interface
+│   │   └── docling_extractor.py # Implementation
+│   ├── splitters/             # Text splitting
+│   │   ├── base.py            # Base splitter interface
+│   │   └── langchain_splitter.py # Implementation
+│   ├── embeddings/            # Embedding generation
+│   │   ├── base.py            # Base generator interface
+│   │   └── openai_embeddings.py # Implementation
+│   ├── indexers/              # Vector indexing
+│   │   ├── base.py            # Base indexer interface
+│   │   └── chroma_indexer.py  # Implementation
+│   └── graphs/                # Knowledge graph generation
+│       ├── client.py          # Neo4j client
+│       ├── generator.py       # Graph generator
+│       └── schema.py          # Schema manager
+├── services/                  # Business logic services
+│   └── document_service.py    # Pipeline orchestration
+└── tasks/                     # Celery tasks
+    └── document_tasks.py      # Asynchronous processing
+```
+
+### Pipeline Components
+
+#### 1. Text Extraction (`extractors/`)
+
+The `DoclingExtractor` implements the `TextExtractor` interface to extract text from various file formats:
+- Plain text (.txt): Simple file reading with encoding fallbacks
+- PDF (.pdf): Uses Docling with OCR capability, fallback to pdfminer
+- DOCX (.docx): Uses docx2txt library
+- Robust error handling with multiple fallback mechanisms
+
+#### 2. Text Splitting (`splitters/`)
+
+The `LangchainSplitter` implements the `TextSplitter` interface to divide long documents into manageable chunks:
+- Uses recursive character splitting 
+- Configurable chunk size and overlap
+- Preserves semantic meaning where possible
+
+#### 3. Embedding Generation (`embeddings/`)
+
+The `OpenAIEmbeddingGenerator` implements the `EmbeddingGenerator` interface:
+- Uses OpenAI's "text-embedding-ada-002" model
+- Creates high-dimensional vector representations of text chunks
+- Handles batch processing for efficiency
+
+#### 4. Vector Indexing (`indexers/`)
+
+The `ChromaIndexer` implements the `VectorIndexer` interface:
+- Stores document chunks with their embeddings
+- Attaches metadata for context
+- Enables semantic search capabilities
+
+#### 5. Graph Generation (`graphs/`)
+
+The knowledge graph module extracts structured information:
+- `Neo4jClient`: Handles database connection and graph operations
+- `SchemaManager`: Defines entity and relationship types
+- `GraphGenerator`: Extracts entities and relationships from text using LLMs
+
+### Orchestration
+
+The `DocumentService` in `services/document_service.py` orchestrates the pipeline:
+```python
+def process_document(self, document):
+    # 1. Extract text
+    text = self.extractor.extract(document.file.path)
+    
+    # 2. Split text into chunks
+    chunks = self.splitter.split(text)
+    
+    # 3. Generate embeddings
+    embeddings = self.embedding_generator.generate(chunks)
+    
+    # 4. Index chunks and embeddings
+    metadata = {...}  # Document metadata
+    self.indexer.index(chunks, embeddings, metadata)
+    
+    # 5. Generate knowledge graph
+    graph_result = self.graph_generator.process_document(...)
+    
+    return {...}  # Result information
+```
+
+### Asynchronous Processing
+
+The `process_document_task` in `tasks/document_tasks.py` handles asynchronous execution:
+- Runs the pipeline in a Celery worker
+- Manages document status updates
+- Includes error handling and retry mechanism
+- Prevents orphaned documents with `cleanup_processing_documents` task
+
+### Error Handling
+
+The pipeline implements robust error handling:
+- Each component has specific error handling for its domain
+- The document service catches and logs exceptions
+- The Celery task updates document status and stores error messages
+- A cleanup task finds and fixes documents stuck in processing
+
+### Testing and Debugging
+
+The system includes tools for testing and debugging the pipeline:
+- `test_pipeline` management command for running the pipeline on a specific document
+- `PipelineLogger` for capturing detailed metrics and artifacts
+- Test dashboard for visualizing pipeline results and performance
 
 ## Additional Resources
 
