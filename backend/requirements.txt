@@ -34,7 +34,10 @@ distro==1.9.0
 Django==5.0.2
 django-cors-headers==4.3.1
 djangorestframework==3.14.0
+docling==2.26.0
 docling-core==2.22.0
+docling-ibm-models==3.4.1
+docling-parse==3.4.0
 docutils==0.21.2
 docx2txt==0.8
 durationpy==0.9
@@ -64,6 +67,7 @@ imageio==2.37.0
 importlib_metadata==8.6.1
 importlib_resources==6.5.2
 Jinja2==3.1.6
+jiter==0.9.0
 jsonlines==3.1.0
 jsonpatch==1.33
 jsonpath-python==1.0.6
@@ -135,6 +139,7 @@ packaging==23.2
 pandas==2.2.3
 pdfminer.six==20231228
 pillow==10.2.0
+pip-autoremove==0.10.0
 posthog==3.19.1
 prompt_toolkit==3.0.50
 propcache==0.3.0
