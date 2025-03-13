@@ -17,6 +17,11 @@ urlpatterns = [
     # Bulk operations
     path('bulk_delete/', views.BulkDeleteView.as_view(), name='bulk-delete'),
     
+    # Debug dashboard
+    path('debug/dashboard/', views.test_dashboard, name='test-dashboard'),
+    path('documents/<uuid:document_id>/logs/', views.document_logs, name='document-logs'),
+    path('documents/<uuid:document_id>/chunks/', views.document_chunks, name='document-chunks'),
+    
     # Include router URLs
     path('', include(router.urls)),
 ]

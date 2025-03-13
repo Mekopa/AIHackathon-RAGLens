@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from celery.schedules import crontab
 
 # Load environment variables from .env file
 load_dotenv()
@@ -120,6 +121,15 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 
+# Celery Beat schedule for periodic tasks
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-processing-documents': {
+        'task': 'dochub.tasks.document_tasks.cleanup_processing_documents',
+        'schedule': crontab(minute='*/15'),  # Run every 15 minutes
+        'args': (),
+    },
+}
+
 # Neo4j settings
 NEO4J_URI = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
 NEO4J_USERNAME = os.getenv('NEO4J_USERNAME', 'neo4j')
@@ -127,6 +137,11 @@ NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'password')
 
 # OpenAI settings
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+
+# Testing settings
+USE_MOCK_EMBEDDINGS = False  # Set to True to use mock embeddings instead of OpenAI
+USE_MOCK_PROCESSOR = False  # Mock the entire document processing
+USE_MOCK_NEO4J = False      # Set to True to use mock Neo4j client
 
 # ChromaDB settings
 CHROMA_PERSIST_DIRECTORY = os.path.join(BASE_DIR, 'chroma_db')
