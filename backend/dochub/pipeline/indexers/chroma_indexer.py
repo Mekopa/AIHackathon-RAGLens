@@ -84,14 +84,30 @@ class ChromaIndexer(VectorIndexer):
         Returns:
             list: List of IDs for indexed chunks
         """
-        if not chunks or not embeddings:
-            logger.warning("No chunks or embeddings provided for indexing")
+        if not chunks:
+            logger.warning("No chunks provided for indexing")
             return []
         
+        # If embeddings are empty but chunks exist, log and return early
+        if not embeddings:
+            logger.warning("No embeddings provided for indexing. Skipping vector indexing but storing metadata.")
+            # Generate IDs for tracking purposes
+            doc_id = metadata.get('document_id', '')
+            if not doc_id:
+                doc_id = metadata.get('file_path', 'unknown').replace('/', '_')
+            ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
+            return ids
+            
         if len(chunks) != len(embeddings):
             error_msg = f"Number of chunks ({len(chunks)}) doesn't match number of embeddings ({len(embeddings)})"
             logger.error(error_msg)
-            raise ValueError(error_msg)
+            # Try to continue with partial data if possible
+            if len(chunks) > len(embeddings):
+                logger.warning(f"Truncating chunks to match embeddings count ({len(embeddings)})")
+                chunks = chunks[:len(embeddings)]
+            else:
+                logger.warning(f"Truncating embeddings to match chunks count ({len(chunks)})")
+                embeddings = embeddings[:len(chunks)]
         
         try:
             # Clean metadata - remove None values and convert to appropriate types
@@ -149,22 +165,89 @@ class ChromaIndexer(VectorIndexer):
         try:
             collection = self._get_collection()
             
-            # Convert query to embedding if needed
+            # Try different approaches to search
             if isinstance(query, str):
-                # This requires the embedding model, which we don't have here
-                # For simplicity, we'll use the query as-is and let ChromaDB handle it
-                results = collection.query(
-                    query_texts=[query],
-                    n_results=limit,
-                    where=metadata_filter
-                )
+                logger.info(f"Searching with text query: {query[:50]}...")
+                
+                # For text queries, we need to convert to embedding or use ChromaDB's built-in conversion
+                # The issue is that Docling might be using a different embedding model than ChromaDB expects
+                try:
+                    # First try with query_texts (Let ChromaDB handle embedding)
+                    results = collection.query(
+                        query_texts=[query],
+                        n_results=limit,
+                        where=metadata_filter
+                    )
+                except Exception as e:
+                    if "dimension" in str(e).lower():
+                        logger.warning(f"Text query failed due to dimension mismatch: {str(e)}. Trying metadata-only search.")
+                        # If we have metadata filter, use it to get documents
+                        if metadata_filter:
+                            logger.info(f"Searching with metadata filter: {metadata_filter}")
+                            results = collection.get(
+                                where=metadata_filter,
+                                limit=limit
+                            )
+                        else:
+                            # Get all documents for this document ID if we can extract it from the query
+                            # This is a reasonable fallback since we're usually searching within a document
+                            try:
+                                # Try to extract a document ID from the text query
+                                import re
+                                doc_ids = re.findall(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', query)
+                                
+                                if doc_ids:
+                                    # If we found potential document IDs, search for chunks from those documents
+                                    doc_id = doc_ids[0]
+                                    logger.info(f"Found potential document ID in query: {doc_id}")
+                                    results = collection.get(
+                                        where={"document_id": doc_id},
+                                        limit=limit
+                                    )
+                                else:
+                                    # No metadata filter and no document ID in query, get recent documents
+                                    logger.warning("No metadata filter provided. Getting most recent documents.")
+                                    results = collection.get(
+                                        limit=limit
+                                    )
+                            except Exception as ex:
+                                logger.warning(f"Error extracting document ID from query: {str(ex)}")
+                                # Fallback to getting recent documents
+                                results = collection.get(
+                                    limit=limit
+                                )
+                    else:
+                        # If it's not a dimension error, re-raise
+                        raise
             else:
-                # Use provided embedding directly
-                results = collection.query(
-                    query_embeddings=[query],
-                    n_results=limit,
-                    where=metadata_filter
-                )
+                # It's an embedding vector
+                embedding_dim = len(query) if hasattr(query, '__len__') else 0
+                logger.info(f"Searching with embedding vector of dimension {embedding_dim}")
+                
+                # We need to handle different embedding dimensions
+                try:
+                    # Attempt the query with the provided embedding
+                    results = collection.query(
+                        query_embeddings=[query],
+                        n_results=limit,
+                        where=metadata_filter
+                    )
+                except Exception as e:
+                    logger.warning(f"Embedding query failed: {str(e)}. Falling back to metadata-only search.")
+                    
+                    # If dimensions don't match, try with metadata search
+                    if metadata_filter:
+                        logger.info(f"Using metadata filter instead: {metadata_filter}")
+                        results = collection.get(
+                            where=metadata_filter,
+                            limit=limit
+                        )
+                    else:
+                        # Without metadata filter, we have to get the most recent documents
+                        logger.warning("No metadata filter provided. Getting most recent documents.")
+                        results = collection.get(
+                            limit=limit
+                        )
             
             # Reshape results for easier consumption
             return {

@@ -48,9 +48,22 @@ class FallbackTextExtractor(TextExtractor):
                 with open(file_path, 'rb') as file:
                     text = pdfminer.high_level.extract_text(file)
                     logger.info(f"Extracted {len(text)} characters from PDF with pdfminer")
-                    return text
+                    if text and len(text.strip()) > 0:
+                        return text
+                    else:
+                        logger.warning("PDFMiner extracted empty text, trying docling fallback")
             except Exception as pdf_error:
                 logger.error(f"PDF extraction failed: {str(pdf_error)}")
+            
+            # If pdfminer fails or returns empty text, try docling as a second option
+            try:
+                from .docling_extractor import DoclingExtractor
+                docling = DoclingExtractor()
+                text = docling.extract(file_path)
+                logger.info(f"Extracted {len(text)} characters from PDF with docling as fallback")
+                return text
+            except Exception as docling_error:
+                logger.error(f"Docling fallback extraction failed: {str(docling_error)}")
                 return ""
         
         # For DOCX files

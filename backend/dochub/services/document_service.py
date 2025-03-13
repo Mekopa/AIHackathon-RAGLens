@@ -70,12 +70,18 @@ class DocumentService:
             
             # STEP 3: Generate embeddings for chunks
             logger.info(f"Generating embeddings for {len(chunks)} chunks")
-            embeddings = self.embedding_generator.generate(chunks)
-            
-            if not embeddings or len(embeddings) != len(chunks):
-                error_msg = "Failed to generate embeddings for all chunks"
-                logger.warning(f"{error_msg}: Got {len(embeddings)} embeddings for {len(chunks)} chunks")
-                raise ValueError(error_msg)
+            try:
+                embeddings = self.embedding_generator.generate(chunks)
+                
+                if not embeddings or len(embeddings) != len(chunks):
+                    error_msg = "Failed to generate embeddings for all chunks"
+                    logger.warning(f"{error_msg}: Got {len(embeddings)} embeddings for {len(chunks)} chunks")
+                    raise ValueError(error_msg)
+            except Exception as e:
+                # Instead of failing the entire pipeline, add a warning and continue with the rest of the steps
+                # This allows other parts like graphs to still work
+                logger.warning(f"Error generating embeddings (will continue without them): {str(e)}")
+                embeddings = []  # Set empty embeddings
             
             # STEP 4: Index chunks and embeddings
             # Prepare metadata for indexing

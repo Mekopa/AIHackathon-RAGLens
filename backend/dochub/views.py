@@ -1239,16 +1239,26 @@ def document_chunks(request, document_id):
         try:
             # Import safely at the top
             from dochub.pipeline.extractors.fallback_extractor import FallbackTextExtractor
+            from dochub.pipeline.extractors.docling_extractor import DoclingExtractor
             from dochub.pipeline.splitters.langchain_splitter import LangchainSplitter
             
             # Create objects outside try block
-            extractor = FallbackTextExtractor()
+            fallback_extractor = FallbackTextExtractor()
+            docling_extractor = DoclingExtractor()
             splitter = LangchainSplitter()
             
-            # Extract text
+            # Extract text - try both extractors
             try:
-                text = extractor.extract(document.file.path)
+                # First try fallback extractor
+                text = fallback_extractor.extract(document.file.path)
+                if not text or len(text) == 0:
+                    # If fallback extractor fails, try docling
+                    text = docling_extractor.extract(document.file.path)
+                
                 response["text_length"] = len(text)
+                if len(text) == 0:
+                    response["error"] = "Could not extract any text from document"
+                    return Response(response)
             except Exception as extract_error:
                 response["error"] = f"Text extraction error: {str(extract_error)}"
                 return Response(response)
@@ -1328,13 +1338,30 @@ def document_logs(request, document_id):
                 if document.file and hasattr(document.file, 'path') and document.file.path:
                     # Get the actual document contents and log the chunks
                     from dochub.pipeline.extractors.fallback_extractor import FallbackTextExtractor
+                    from dochub.pipeline.extractors.docling_extractor import DoclingExtractor
                     from dochub.pipeline.splitters.langchain_splitter import LangchainSplitter
                     
                     try:
-                        # Extract the text from the actual document
-                        extractor = FallbackTextExtractor()
-                        text = extractor.extract(document.file.path)
+                        # Extract the text from the actual document - try both extractors
+                        fallback_extractor = FallbackTextExtractor()
+                        docling_extractor = DoclingExtractor()
+                        
+                        # First try fallback extractor
+                        text = fallback_extractor.extract(document.file.path)
+                        if not text or len(text) == 0:
+                            # If fallback extractor fails, try docling
+                            logger.log_step(str(document_id), 'text_extraction', 'info', {
+                                'message': 'Fallback extractor returned empty text, trying Docling extractor'
+                            })
+                            text = docling_extractor.extract(document.file.path)
+                            
                         text_length = len(text)
+                        
+                        if text_length == 0:
+                            logger.log_step(str(document_id), 'text_extraction', 'error', {
+                                'message': 'Failed to extract text - both extractors returned empty text'
+                            })
+                            return Response(response_data)
                         
                         # Log the text extraction
                         logger.log_step(str(document_id), 'text_extraction', 'completed', {
