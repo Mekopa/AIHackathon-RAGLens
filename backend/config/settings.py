@@ -139,7 +139,7 @@ NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'password')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
 # Testing settings
-USE_MOCK_EMBEDDINGS = False  # Set to True to use mock embeddings instead of OpenAI
+USE_MOCK_EMBEDDINGS = True  # Set to True to use mock embeddings instead of OpenAI
 USE_MOCK_PROCESSOR = False  # Mock the entire document processing
 USE_MOCK_NEO4J = False      # Set to True to use mock Neo4j client
 
