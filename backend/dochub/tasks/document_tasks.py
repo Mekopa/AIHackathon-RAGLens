@@ -51,7 +51,12 @@ def process_document_task(self, document_id):
                     document.error_message = None
                     document.save(update_fields=['status', 'error_message'])
                 
+                file_path = document.file.path if document.file else "No file"
+                file_size = os.path.getsize(document.file.path) if document.file and os.path.exists(document.file.path) else 0
+                file_type = document.file_type or "unknown"
+                
                 logger.info(f"Processing document: {document.name} (ID: {document_id})")
+                logger.info(f"Document details: Type={file_type}, Size={file_size} bytes, Path={file_path}")
                 
             except Document.DoesNotExist:
                 logger.error(f"Document {document_id} not found")
@@ -89,6 +94,30 @@ def process_document_task(self, document_id):
                 document.status = 'error'
                 document.error_message = str(processing_error)
                 document.save(update_fields=['status', 'error_message'])
+            
+            # If this is the final retry, record detailed error information
+            if self.request.retries >= self.max_retries - 1:
+                try:
+                    # Add a more detailed error report if this is a final attempt
+                    additional_info = f'''
+Document: {document.name} (ID: {document_id})
+Format: {document.file_type}
+Error: {str(processing_error)}
+Path: {document.file.path}
+
+To process this document manually:
+1. Check if the document is properly formatted and not corrupted
+2. Install required dependencies for document processing: 
+   sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng antiword catdoc libreoffice
+3. Try processing with: docling, pymupdf, python-docx, PyPDF2, easyocr, pytesseract
+4. See ERROR_DEBUGGING.md for more details
+'''
+                    with open(f'/tmp/document_error_{document_id}.log', 'w') as f:
+                        f.write(additional_info)
+                    
+                    logger.error(f"Detailed error report written to /tmp/document_error_{document_id}.log")
+                except Exception as log_error:
+                    logger.error(f"Failed to write detailed error log: {str(log_error)}")
             
             # Check if we should retry
             if self.request.retries < self.max_retries:

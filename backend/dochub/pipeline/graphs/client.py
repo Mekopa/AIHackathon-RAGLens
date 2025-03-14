@@ -230,11 +230,13 @@ class Neo4jClient:
                 "name": entity_name
             }
             
-            # Add any additional properties
+            # Add any additional properties - sanitize property names for Neo4j
             for key, value in properties.items():
                 if key not in ["id", "name"]:
-                    cypher += f"SET e.{key} = ${key}\n"
-                    params[key] = value
+                    # Sanitize property key for Neo4j (replace invalid characters)
+                    sanitized_key = self._sanitize_property_key(key)
+                    cypher += f"SET e.{sanitized_key} = ${sanitized_key}\n"
+                    params[sanitized_key] = value
             
             # Link to document if provided
             if document_id:
@@ -247,6 +249,33 @@ class Neo4jClient:
             
             # Execute query
             session.run(cypher, **params)
+            
+    def _sanitize_property_key(self, key: str) -> str:
+        """
+        Sanitize a property key for Neo4j.
+        
+        Args:
+            key: Property key
+            
+        Returns:
+            Sanitized property key
+        """
+        # Replace colons, periods, and other problematic characters
+        sanitized = key.replace(':', '_').replace('.', '_').replace('-', '_')
+        sanitized = sanitized.replace(' ', '_').replace('/', '_').replace('\\', '_')
+        sanitized = sanitized.replace('(', '').replace(')', '').replace('[', '').replace(']', '')
+        sanitized = sanitized.replace('{', '').replace('}', '')
+        sanitized = sanitized.replace('@', '_at_').replace('#', '_hash_')
+        
+        # Ensure it doesn't start with a number
+        if sanitized and sanitized[0].isdigit():
+            sanitized = 'p_' + sanitized
+            
+        # If empty after sanitization, provide a fallback
+        if not sanitized:
+            sanitized = 'property'
+            
+        return sanitized
     
     def _store_relationship(self, rel: Dict, document_id: str = None) -> None:
         """
@@ -270,15 +299,18 @@ class Neo4jClient:
                 "document_id": str(document_id) if document_id else None
             }
             
-            # Add properties to params
+            # Add properties to params with sanitized keys
+            sanitized_properties = {}
             for key, value in properties.items():
-                params[key] = value
+                sanitized_key = self._sanitize_property_key(key)
+                sanitized_properties[sanitized_key] = value
+                params[sanitized_key] = value
             
             # Build property string for relationship creation
             prop_string = ""
-            if properties:
+            if sanitized_properties:
                 prop_parts = []
-                for key in properties.keys():
+                for key in sanitized_properties.keys():
                     if key != "document_id":  # Skip document_id as it's handled separately
                         prop_parts.append(f"{key}: ${key}")
                 

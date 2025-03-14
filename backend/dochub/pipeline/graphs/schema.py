@@ -23,6 +23,7 @@ ENTITY_TYPES = {
     "Document": ["document", "file", "report", "paper", "publication"]
 }
 
+
 # Relationship types schema definition
 RELATIONSHIP_TYPES = {
     "RELATED_TO": ["related to", "associated with", "connected to", "linked to"],

@@ -50,23 +50,42 @@ class DocumentService:
             
             # STEP 1: Extract text from document
             logger.info(f"Extracting text from document: {file_path}")
-            text = self.extractor.extract(file_path)
-            
-            if not text:
-                error_msg = "No text extracted from document"
-                logger.warning(f"{error_msg}: {document.name}")
+            try:
+                text = self.extractor.extract(file_path)
+                
+                if not text:
+                    error_msg = f"No text extracted from document: {document.name}"
+                    logger.warning(error_msg)
+                    raise ValueError(error_msg)
+                
+                # Check if we have sufficient text
+                # Making this very permissive (10 chars) just to allow documents to be processed
+                if len(text.strip()) < 10:
+                    error_msg = f"Extracted text is too short ({len(text)} chars) for {document.name}. Text extraction failed."
+                    logger.warning(error_msg)
+                    raise ValueError(error_msg)
+                    
+                logger.info(f"Successfully extracted {len(text)} characters from {document.name}")
+            except Exception as extract_error:
+                error_msg = f"Text extraction failed for {document.name}: {str(extract_error)}"
+                logger.error(error_msg)
                 raise ValueError(error_msg)
             
             # STEP 2: Split text into chunks
             logger.info(f"Splitting text into chunks (length: {len(text)} characters)")
-            chunks = self.splitter.split(text)
-            
-            if not chunks:
-                error_msg = "Failed to split text into chunks"
-                logger.warning(f"{error_msg}: {document.name}")
+            try:
+                chunks = self.splitter.split(text)
+                
+                if not chunks:
+                    error_msg = f"Failed to split text into chunks: {document.name}"
+                    logger.warning(error_msg)
+                    raise ValueError(error_msg)
+                
+                logger.info(f"Created {len(chunks)} chunks from {document.name}")
+            except Exception as split_error:
+                error_msg = f"Text splitting failed for {document.name}: {str(split_error)}"
+                logger.error(error_msg)
                 raise ValueError(error_msg)
-            
-            logger.info(f"Created {len(chunks)} chunks")
             
             # STEP 3: Generate embeddings for chunks
             logger.info(f"Generating embeddings for {len(chunks)} chunks")
