@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processing Pipeline Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a; /* Dark navy background */
+            color: #e2e8f0;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -1rem;
+            top: 1.5rem;
+            height: 100%;
+            width: 2px;
+            background-color: #334155;
+            z-index: -1;
+        }
+        
+        .timeline-item:last-child::before {
+            display: none;
+        }
+        
+        .timeline-dot {
+            position: absolute;
+            left: -1.25rem;
+            top: 1.2rem;
+            height: 0.75rem;
+            width: 0.75rem;
+            border-radius: 9999px;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+
+        .tab-active {
+            border-bottom: 2px solid #818cf8;
+            color: #818cf8;
+        }
+
+        /* Dark theme scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 min-h-screen text-slate-200">
+    <div class="container mx-auto px-4 py-8">
+        <header class="bg-slate-800 shadow rounded-lg p-6 mb-6 border border-slate-700">
+            <h1 class="text-3xl font-bold text-white">Document Processing Pipeline Dashboard</h1>
+            <p class="text-slate-400 mt-2">Monitor document processing steps, entities, and relationships</p>
+        </header>
+
+        <div class="bg-slate-800 shadow rounded-lg mb-6 overflow-hidden border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700">
+                <h2 class="text-xl font-semibold text-white">Document Selection</h2>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-300 mb-2" for="document-select">Select Document:</label>
+                    <select id="document-select" class="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
+                        <option value="" selected>Choose a document</option>
+                        <!-- Documents will be loaded here -->
+                    </select>
+                </div>
+                <button id="load-documents-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+                    Load Documents
+                </button>
+                <button id="refresh-logs-btn" class="ml-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded">
+                    Refresh Logs
+                </button>
+            </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="bg-slate-800 shadow rounded-lg overflow-hidden mb-6 border border-slate-700">
+            <div class="flex border-b border-slate-700">
+                <button class="tab-btn tab-active px-4 py-2 text-sm font-medium" data-tab="pipeline">
+                    Pipeline Steps
+                </button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium" data-tab="chunks">
+                    Text Chunks
+                </button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium" data-tab="entities">
+                    Entities
+                </button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium" data-tab="relationships">
+                    Relationships
+                </button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium" data-tab="graph">
+                    Graph Preview
+                </button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium" data-tab="errors">
+                    Error Debug
+                </button>
+            </div>
+            
+            <!-- Tab Content -->
+            <div id="tab-content">
+                <!-- Pipeline Timeline Tab -->
+                <div id="pipeline-tab" class="tab-panel p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">Processing Timeline</h3>
+                    <div id="timeline" class="relative pl-8">
+                        <!-- Timeline items will be inserted here -->
+                        <div class="text-center text-slate-400 py-8">
+                            Select a document to view pipeline steps
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Error Debug Tab -->
+                <div id="errors-tab" class="tab-panel p-6 hidden">
+                    <h3 class="text-lg font-semibold text-white mb-4">Pipeline Error Debugging</h3>
+                    
+                    <!-- Document Status Card -->
+                    <div class="mb-6 bg-slate-800 rounded-lg border border-slate-700 shadow-sm">
+                        <div class="p-4 border-b border-slate-700">
+                            <h4 class="text-md font-semibold text-white">Document Status</h4>
+                        </div>
+                        <div class="p-4" id="doc-status-container">
+                            <div class="flex items-center space-x-4">
+                                <div id="doc-status-indicator" class="w-4 h-4 rounded-full bg-slate-600"></div>
+                                <span id="doc-status-text" class="text-slate-400">No document selected</span>
+                            </div>
+                            <div id="doc-status-details" class="mt-2 text-sm text-slate-400"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pipeline Components Status -->
+                    <div class="mb-6 bg-slate-800 rounded-lg border border-slate-700 shadow-sm">
+                        <div class="p-4 border-b border-slate-700">
+                            <h4 class="text-md font-semibold text-white">Pipeline Components</h4>
+                        </div>
+                        <div class="p-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Text Extraction -->
+                                <div class="p-4 border border-slate-700 rounded-lg bg-slate-800" id="extraction-status-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h5 class="font-medium text-slate-300">Text Extraction</h5>
+                                        <div id="extraction-status-indicator" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                                    </div>
+                                    <div id="extraction-status-text" class="text-sm text-slate-400">Not started</div>
+                                    <div id="extraction-error" class="mt-2 text-sm text-red-400 hidden"></div>
+                                </div>
+                                
+                                <!-- Text Splitting -->
+                                <div class="p-4 border border-slate-700 rounded-lg bg-slate-800" id="splitting-status-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h5 class="font-medium text-slate-300">Text Splitting</h5>
+                                        <div id="splitting-status-indicator" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                                    </div>
+                                    <div id="splitting-status-text" class="text-sm text-slate-400">Not started</div>
+                                    <div id="splitting-error" class="mt-2 text-sm text-red-400 hidden"></div>
+                                </div>
+                                
+                                <!-- Embedding Generation -->
+                                <div class="p-4 border border-slate-700 rounded-lg bg-slate-800" id="embedding-status-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h5 class="font-medium text-slate-300">Embedding Generation</h5>
+                                        <div id="embedding-status-indicator" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                                    </div>
+                                    <div id="embedding-status-text" class="text-sm text-slate-400">Not started</div>
+                                    <div id="embedding-error" class="mt-2 text-sm text-red-400 hidden"></div>
+                                </div>
+                                
+                                <!-- Vector Indexing -->
+                                <div class="p-4 border border-slate-700 rounded-lg bg-slate-800" id="indexing-status-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h5 class="font-medium text-slate-300">Vector Indexing</h5>
+                                        <div id="indexing-status-indicator" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                                    </div>
+                                    <div id="indexing-status-text" class="text-sm text-slate-400">Not started</div>
+                                    <div id="indexing-error" class="mt-2 text-sm text-red-400 hidden"></div>
+                                </div>
+                                
+                                <!-- Graph Extraction -->
+                                <div class="p-4 border border-slate-700 rounded-lg bg-slate-800" id="graph-extract-status-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h5 class="font-medium text-slate-300">Graph Extraction</h5>
+                                        <div id="graph-extract-status-indicator" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                                    </div>
+                                    <div id="graph-extract-status-text" class="text-sm text-slate-400">Not started</div>
+                                    <div id="graph-extract-error" class="mt-2 text-sm text-red-400 hidden"></div>
+                                </div>
+                                
+                                <!-- Neo4j Storage -->
+                                <div class="p-4 border border-slate-700 rounded-lg bg-slate-800" id="neo4j-status-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h5 class="font-medium text-slate-300">Neo4j Storage</h5>
+                                        <div id="neo4j-status-indicator" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                                    </div>
+                                    <div id="neo4j-status-text" class="text-sm text-slate-400">Not started</div>
+                                    <div id="neo4j-error" class="mt-2 text-sm text-red-400 hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Error Details Collapsible -->
+                    <div class="bg-slate-800 rounded-lg border border-slate-700 shadow-sm" id="error-details-section">
+                        <div class="p-4 border-b border-slate-700">
+                            <h4 class="text-md font-semibold text-white">Error Details</h4>
+                        </div>
+                        <div class="p-4">
+                            <div id="error-details-container" class="text-sm">
+                                <div class="text-center text-slate-400 py-4">No errors detected</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Troubleshooting Tips Collapsible -->
+                    <div class="mt-6 bg-slate-800 rounded-lg border border-slate-700 shadow-sm" id="troubleshooting-section">
+                        <div class="p-4 border-b border-slate-700">
+                            <h4 class="text-md font-semibold text-white">Troubleshooting Tips</h4>
+                        </div>
+                        <div class="p-4">
+                            <div id="troubleshooting-container" class="text-sm">
+                                <ul class="list-disc pl-5 space-y-2 text-slate-300">
+                                    <li><strong>Document not processing:</strong> Check if the document file exists and is accessible. Try re-uploading the file.</li>
+                                    <li><strong>Text extraction failing:</strong> Ensure the file is not corrupted and is a supported format (PDF, DOCX, TXT).</li>
+                                    <li><strong>Celery tasks not running:</strong> Verify that Celery workers are running and can access the task queue.</li>
+                                    <li><strong>Neo4j connection errors:</strong> Check that the Neo4j database is running and credentials are correct.</li>
+                                    <li><strong>API errors:</strong> Verify network connectivity and API credentials (like OpenAI API key).</li>
+                                    <li><strong>Missing dependencies:</strong> Make sure all required packages are installed, especially the docling package.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Chunks Tab -->
+                <div id="chunks-tab" class="tab-panel p-6 hidden">
+                    <h3 class="text-lg font-semibold text-white mb-4">Text Chunks</h3>
+                    <div id="chunks-container" class="divide-y divide-slate-700">
+                        <!-- Chunks will be inserted here -->
+                        <div class="text-center text-slate-400 py-8">
+                            Select a document to view text chunks
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Entities Tab -->
+                <div id="entities-tab" class="tab-panel p-6 hidden">
+                    <h3 class="text-lg font-semibold text-white mb-4">Extracted Entities</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-slate-800" id="entities-table">
+                            <thead class="bg-slate-700">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Chunk</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Properties</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700" id="entities-tbody">
+                                <!-- Entities will be inserted here -->
+                                <tr>
+                                    <td colspan="5" class="text-center text-slate-400 py-8">
+                                        Select a document to view entities
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Relationships Tab -->
+                <div id="relationships-tab" class="tab-panel p-6 hidden">
+                    <h3 class="text-lg font-semibold text-white mb-4">Extracted Relationships</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-slate-800" id="relationships-table">
+                            <thead class="bg-slate-700">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Source</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Relationship</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Target</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Chunk</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Properties</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700" id="relationships-tbody">
+                                <!-- Relationships will be inserted here -->
+                                <tr>
+                                    <td colspan="5" class="text-center text-slate-400 py-8">
+                                        Select a document to view relationships
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Graph Preview Tab -->
+                <div id="graph-tab" class="tab-panel p-6 hidden">
+                    <h3 class="text-lg font-semibold text-white mb-4">Graph Preview</h3>
+                    
+                    <!-- Graph Navigation Controls -->
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <a id="view-graph-link" href="#" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded inline-block">
+                            View Full Graph
+                        </a>
+                        <button id="reload-graph-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            Refresh Graph
+                        </button>
+                        <button id="zoom-in-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-2 px-4 rounded">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zm-7-3v6m-3-3h6" />
+                            </svg>
+                            Zoom In
+                        </button>
+                        <button id="zoom-out-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-2 px-4 rounded">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zm-7-3v3m-3-3h6" />
+                            </svg>
+                            Zoom Out
+                        </button>
+                        <button id="fit-view-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-2 px-4 rounded">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                            </svg>
+                            Fit View
+                        </button>
+                    </div>
+                    
+                    <!-- Graph Visualization Container -->
+                    <div class="relative">
+                        <div id="graph-container" class="aspect-video bg-slate-900 border border-slate-700 rounded-lg overflow-hidden" style="height: 500px;"></div>
+                        <div id="graph-loading" class="absolute inset-0 bg-slate-800 bg-opacity-75 flex items-center justify-center">
+                            <div class="text-center">
+                                <svg class="animate-spin h-10 w-10 text-indigo-400 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <p class="text-slate-300">Loading Graph Data</p>
+                            </div>
+                        </div>
+                        <div id="graph-error" class="absolute inset-0 bg-slate-800 bg-opacity-75 flex items-center justify-center hidden">
+                            <div class="text-center p-6 max-w-md">
+                                <svg class="h-16 w-16 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <h3 class="text-lg font-medium text-red-400 mb-2">Graph Visualization Error</h3>
+                                <p id="graph-error-message" class="text-red-300 mb-4">Failed to load or render graph data.</p>
+                                <button id="retry-graph-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                                    Retry Loading
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Graph Legend -->
+                    <div class="mt-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
+                        <h4 class="font-medium text-white mb-2">Graph Legend</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-pink-500"></span>
+                                <span class="text-sm text-slate-300">Person</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-blue-500"></span>
+                                <span class="text-sm text-slate-300">Organization</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-green-500"></span>
+                                <span class="text-sm text-slate-300">Location</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-purple-500"></span>
+                                <span class="text-sm text-slate-300">Concept</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-red-500"></span>
+                                <span class="text-sm text-slate-300">Event</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-cyan-500"></span>
+                                <span class="text-sm text-slate-300">Topic</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-yellow-500"></span>
+                                <span class="text-sm text-slate-300">Product</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-slate-500"></span>
+                                <span class="text-sm text-slate-300">Technology</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-amber-500"></span>
+                                <span class="text-sm text-slate-300">Document</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 mr-2 rounded-full bg-slate-400"></span>
+                                <span class="text-sm text-slate-300">Other</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Node Details Panel (Hidden by default) -->
+                    <div id="node-details-panel" class="mt-4 p-4 bg-slate-800 rounded-lg border border-slate-700 hidden">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-medium text-white" id="node-details-title">Node Details</h4>
+                            <button id="close-node-details" class="text-slate-400 hover:text-slate-200">
+                                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="node-details-content">
+                            <!-- Node details will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching functionality
+        document.querySelectorAll('.tab-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove active class from all buttons
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.classList.remove('tab-active');
+                });
+                
+                // Add active class to clicked button
+                button.classList.add('tab-active');
+                
+                // Hide all tab panels
+                document.querySelectorAll('.tab-panel').forEach(panel => {
+                    panel.classList.add('hidden');
+                });
+                
+                // Show the selected tab panel
+                const tabId = button.getAttribute('data-tab');
+                document.getElementById(`${tabId}-tab`).classList.remove('hidden');
+            });
+        });
+        
+        // Document loading and processing
+        const loadDocumentsBtn = document.getElementById('load-documents-btn');
+        const refreshLogsBtn = document.getElementById('refresh-logs-btn');
+        const documentSelect = document.getElementById('document-select');
+        
+        // Shared data store for pipeline data
+        let pipelineData = {};
+        
+        // Load documents
+        loadDocumentsBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/dochub/documents/');
+                const data = await response.json();
+                
+                // Clear select options except the first one
+                while (documentSelect.options.length > 1) {
+                    documentSelect.remove(1);
+                }
+                
+                // Add new options
+                data.results.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = `${doc.name} (${doc.status})`;
+                    option.dataset.status = doc.status;
+                    documentSelect.appendChild(option);
+                });
+                
+                alert(`Loaded ${data.results.length} documents`);
+            } catch (error) {
+                console.error('Error loading documents:', error);
+                alert('Error loading documents. See console for details.');
+            }
+        });
+        
+        // Load processing logs when document is selected
+        documentSelect.addEventListener('change', async () => {
+            const documentId = documentSelect.value;
+            if (!documentId) return;
+            
+            await loadDocumentLogs(documentId);
+        });
+        
+        // Refresh logs for the current document
+        refreshLogsBtn.addEventListener('click', async () => {
+            const documentId = documentSelect.value;
+            if (!documentId) {
+                alert('Please select a document first');
+                return;
+            }
+            
+            await loadDocumentLogs(documentId);
+        });
+        
+        // Load document processing logs
+        async function loadDocumentLogs(documentId) {
+            try {
+                // Set loading states
+                document.getElementById('timeline').innerHTML = '<div class="text-center text-slate-400 py-8">Loading pipeline steps...</div>';
+                document.getElementById('chunks-container').innerHTML = '<div class="text-center text-slate-400 py-8">Loading text chunks...</div>';
+                document.getElementById('entities-tbody').innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-8">Loading entities...</td></tr>';
+                document.getElementById('relationships-tbody').innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-8">Loading relationships...</td></tr>';
+                
+                // Reset error debugging tab
+                resetErrorDebugging();
+                
+                // Set the graph view link
+                const viewGraphLink = document.getElementById('view-graph-link');
+                viewGraphLink.href = `/api/dochub/graph/document/${documentId}/`;
+                
+                // Fetch pipeline logs
+                const pipelineResponse = await fetch(`/api/dochub/documents/${documentId}/logs/`);
+                pipelineData = await pipelineResponse.json();
+                
+                // Log the entire pipeline data to help debugging
+                console.log("Pipeline data received:", pipelineData);
+                
+                // Also fetch chunks directly from the dedicated API endpoint
+                try {
+                    console.log("Fetching chunks from direct API...");
+                    const chunksResponse = await fetch(`/api/dochub/documents/${documentId}/chunks/`);
+                    const chunksData = await chunksResponse.json();
+                    console.log("Direct chunks API response:", chunksData);
+                    
+                    // Add the chunks data to the pipeline data for easier access
+                    pipelineData.directChunksAPI = chunksData;
+                    
+                    // If we have chunks, use them directly
+                    if (chunksData.chunks && chunksData.chunks.length > 0) {
+                        console.log(`Found ${chunksData.chunks.length} chunks via direct API!`);
+                    }
+                } catch (chunksError) {
+                    console.error("Error fetching direct chunks:", chunksError);
+                }
+                
+                // Render timeline
+                renderTimeline(pipelineData.logs);
+                
+                // Extract and render chunks
+                renderChunks(pipelineData.logs);
+                
+                // Fetch graph data
+                const graphResponse = await fetch(`/api/dochub/graph/document/${documentId}/`);
+                const graphData = await graphResponse.json();
+                
+                // Render entities and relationships
+                renderEntities(graphData.nodes || []);
+                renderRelationships(graphData.links || [], graphData.nodes || []);
+                
+                // Render graph visualization
+                renderGraphVisualization(graphData);
+                
+                // Update error debugging tab
+                updateErrorDebugging(pipelineData);
+                
+            } catch (error) {
+                console.error('Error loading document logs:', error);
+                alert('Error loading document logs. See console for details.');
+            }
+        }
+        
+        // Render the processing timeline
+        function renderTimeline(logs) {
+            const timeline = document.getElementById('timeline');
+            
+            if (!logs || logs.length === 0) {
+                timeline.innerHTML = '<div class="text-center text-slate-400 py-8">No processing logs found for this document</div>';
+                return;
+            }
+            
+            let timelineHTML = '';
+            
+            // Group logs by stage
+            const stageGroups = logs.reduce((groups, log) => {
+                const stage = log.stage;
+                if (!groups[stage]) {
+                    groups[stage] = [];
+                }
+                groups[stage].push(log);
+                return groups;
+            }, {});
+            
+            // Process each stage
+            Object.entries(stageGroups).forEach(([stage, stageLogs]) => {
+                // Create a group for the stage
+                timelineHTML += `
+                    <div class="timeline-item relative mb-8">
+                        <div class="timeline-dot bg-indigo-500"></div>
+                        <div class="mb-2">
+                            <h4 class="text-md font-semibold text-white">${formatStage(stage)}</h4>
+                        </div>
+                `;
+                
+                // Process each log in the stage
+                stageLogs.forEach(log => {
+                    // Determine status color
+                    let statusColor = 'bg-slate-700 text-slate-300';
+                    if (log.status === 'completed' || log.status === 'success') {
+                        statusColor = 'bg-green-900 text-green-300';
+                    } else if (log.status === 'error') {
+                        statusColor = 'bg-red-900 text-red-300';
+                    } else if (log.status === 'started') {
+                        statusColor = 'bg-blue-900 text-blue-300';
+                    } else if (log.status.includes('progress')) {
+                        statusColor = 'bg-yellow-900 text-yellow-300';
+                    }
+                    
+                    // Format timestamp
+                    const timestamp = new Date(log.timestamp).toLocaleString();
+                    
+                    // Create log entry
+                    timelineHTML += `
+                        <div class="ml-6 mb-3 p-3 bg-slate-800 rounded-lg shadow-sm border border-slate-700">
+                            <div class="flex justify-between items-start">
+                                <span class="px-2 py-1 text-xs rounded ${statusColor}">${log.status}</span>
+                                <span class="text-xs text-slate-400">${timestamp}</span>
+                            </div>
+                            ${log.details ? `
+                                <div class="mt-2">
+                                    <details>
+                                        <summary class="text-sm text-slate-400 cursor-pointer hover:text-slate-200">
+                                            Details
+                                        </summary>
+                                        <pre class="mt-2 text-xs bg-slate-900 p-2 rounded">${JSON.stringify(log.details, null, 2)}</pre>
+                                    </details>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                timelineHTML += `</div>`;
+            });
+            
+            timeline.innerHTML = timelineHTML;
+        }
+        
+        // Render text chunks
+        function renderChunks(logs) {
+            const chunksContainer = document.getElementById('chunks-container');
+            
+            // Super direct approach from the specific chunks API
+            if (pipelineData.directChunksAPI && pipelineData.directChunksAPI.chunks && pipelineData.directChunksAPI.chunks.length > 0) {
+                console.log("Using chunks from direct API endpoint:", pipelineData.directChunksAPI.chunks);
+                
+                let chunksHTML = `
+                    <div class="bg-green-900 border-l-4 border-green-500 p-4 mb-4">
+                        <p class="text-green-300">✓ Chunks directly extracted from document</p>
+                        <p class="text-sm text-green-400">Found ${pipelineData.directChunksAPI.chunks.length} chunks via dedicated API</p>
+                    </div>
+                `;
+                
+                pipelineData.directChunksAPI.chunks.forEach((chunk, index) => {
+                    chunksHTML += `
+                        <div class="py-4">
+                            <h4 class="font-medium text-white">Chunk ${index + 1}</h4>
+                            <p class="mt-1 text-sm text-slate-300">${chunk}</p>
+                        </div>
+                    `;
+                });
+                
+                chunksContainer.innerHTML = chunksHTML;
+                return;
+            }
+            
+            // Check for direct chunks in the main API response
+            if (pipelineData.direct_chunks && pipelineData.direct_chunks.length > 0) {
+                console.log("Found direct chunks in API response:", pipelineData.direct_chunks);
+                
+                let chunksHTML = `
+                    <div class="bg-green-900 border-l-4 border-green-500 p-4 mb-4">
+                        <p class="text-green-300">✓ Chunks directly extracted from document</p>
+                        <p class="text-sm text-green-400">Found ${pipelineData.direct_chunks.length} chunks via direct extraction</p>
+                    </div>
+                `;
+                
+                pipelineData.direct_chunks.forEach((chunk, index) => {
+                    chunksHTML += `
+                        <div class="py-4">
+                            <h4 class="font-medium text-white">Chunk ${index + 1}</h4>
+                            <p class="mt-1 text-sm text-slate-300">${chunk}</p>
+                        </div>
+                    `;
+                });
+                
+                chunksContainer.innerHTML = chunksHTML;
+                return;
+            }
+            
+            // If there are chroma chunks from direct API response, use those
+            if (pipelineData.chroma_chunks && pipelineData.chroma_chunks.length > 0) {
+                console.log("Found Chroma chunks in API response:", pipelineData.chroma_chunks);
+                
+                let chunksHTML = `
+                    <div class="bg-green-900 border-l-4 border-green-500 p-4 mb-4">
+                        <p class="text-green-300">✓ Chunks found in ChromaDB</p>
+                        <p class="text-sm text-green-400">Found ${pipelineData.chroma_chunks.length} chunks in the vector database</p>
+                    </div>
+                `;
+                
+                pipelineData.chroma_chunks.forEach((chunk, index) => {
+                    const chunkId = pipelineData.chroma_ids ? pipelineData.chroma_ids[index] : `chunk_${index}`;
+                    chunksHTML += `
+                        <div class="py-4">
+                            <h4 class="font-medium text-white">Chunk ${index + 1} <span class="text-xs text-slate-400">(ID: ${chunkId})</span></h4>
+                            <p class="mt-1 text-sm text-slate-300">${chunk}</p>
+                        </div>
+                    `;
+                });
+                
+                chunksContainer.innerHTML = chunksHTML;
+                return;
+            }
+            
+            // Check for debug_chroma logs with actual chunks
+            const chromaLogs = logs.filter(log => log.stage === 'debug_chroma' && log.status === 'success');
+            if (chromaLogs.length > 0 && chromaLogs[0].details?.chroma_chunks) {
+                const chromaChunks = chromaLogs[0].details.chroma_chunks;
+                const chunkIds = chromaLogs[0].details.chunk_ids || [];
+                
+                let chunksHTML = `
+                    <div class="bg-green-900 border-l-4 border-green-500 p-4 mb-4">
+                        <p class="text-green-300">✓ Chunks successfully verified in ChromaDB</p>
+                        <p class="text-sm text-green-400">Found ${chromaChunks.length} chunks in the vector database</p>
+                    </div>
+                `;
+                
+                chromaChunks.forEach((chunk, index) => {
+                    const chunkId = chunkIds[index] || `chunk_${index}`;
+                    chunksHTML += `
+                        <div class="py-4">
+                            <h4 class="font-medium text-white">Chunk ${index + 1} <span class="text-xs text-slate-400">(ID: ${chunkId})</span></h4>
+                            <p class="mt-1 text-sm text-slate-300">${chunk}</p>
+                        </div>
+                    `;
+                });
+                
+                chunksContainer.innerHTML = chunksHTML;
+                return;
+            }
+            
+            // Find chunk-related logs (text_splitting stage)
+            const chunkLogs = logs.filter(log => log.stage === 'text_splitting' && log.status === 'completed');
+            
+            if (chunkLogs.length === 0) {
+                chunksContainer.innerHTML = '<div class="text-center text-slate-400 py-8">No text chunks found for this document</div>';
+                return;
+            }
+            
+            // Find the completion log that should contain chunks in details
+            const completionLog = chunkLogs[0];
+            
+            // Try different ways to access chunks based on API response structure
+            console.log("Searching for chunks in", completionLog);
+            
+            // Try various possible keys for chunks
+            let chunks = completionLog.details?.chunks;
+            if (!chunks) {
+                // Try other common keys
+                for (const possibleKey of ['chunks', 'text_chunks', 'chroma_chunks', 'documents', 'texts']) {
+                    if (completionLog.details?.[possibleKey]) {
+                        console.log("Found chunks under key:", possibleKey);
+                        chunks = completionLog.details[possibleKey];
+                        break;
+                    }
+                }
+            }
+            
+            if (!chunks && completionLog.details && Object.keys(completionLog.details).length > 0) {
+                // Log what's actually in the details to help debug
+                console.log("Chunk details keys:", Object.keys(completionLog.details));
+                console.log("Chunk details:", completionLog.details);
+                
+                // Try other likely fields
+                if (completionLog.details.chunk_count && completionLog.details.chunk_count > 0) {
+                    // If we know how many chunks there should be but don't have the content,
+                    // create placeholders
+                    chunks = Array(completionLog.details.chunk_count).fill().map((_, i) => 
+                        `[Chunk ${i+1} content not available in API response]`
+                    );
+                }
+            }
+            
+            // If still no chunks, try other approaches
+            if (!chunks || chunks.length === 0) {
+                // Try to extract from graph extraction logs that have chunk_index
+                const extractionLogs = logs.filter(log => log.stage === 'graph_extraction' && 
+                                                log.details?.chunk_index !== undefined);
+                
+                if (extractionLogs.length > 0) {
+                    let chunksHTML = '';
+                    
+                    // Group logs by chunk index
+                    const chunkIndices = [...new Set(extractionLogs.map(log => log.details.chunk_index))].sort((a, b) => a - b);
+                    
+                    chunkIndices.forEach(index => {
+                        chunksHTML += `
+                            <div class="py-4">
+                                <h4 class="font-medium text-white">Chunk ${index + 1}</h4>
+                                <p class="mt-1 text-sm text-slate-400">[Text not available, but this chunk was processed]</p>
+                            </div>
+                        `;
+                    });
+                    
+                    chunksContainer.innerHTML = chunksHTML;
+                } else {
+                    // Display a message about missing chunks but with helpful debug info
+                    chunksContainer.innerHTML = `
+                        <div class="bg-yellow-900 border-l-4 border-yellow-500 p-4 mb-4">
+                            <p class="text-yellow-300">Chunks missing in API response data</p>
+                            <p class="text-sm text-yellow-400">The API returned information about chunks but did not include their content</p>
+                            <details>
+                                <summary class="text-xs cursor-pointer mt-2 text-slate-300">Debug details</summary>
+                                <pre class="text-xs bg-slate-900 p-2 mt-1 rounded overflow-auto">${JSON.stringify(completionLog.details, null, 2)}</pre>
+                            </details>
+                        </div>
+                        <div class="text-center text-slate-400 py-4">
+                            Check the document in ChromaDB directly to view chunks
+                        </div>
+                    `;
+                }
+                return;
+            }
+            
+            // Render each chunk
+            let chunksHTML = '';
+            chunks.forEach((chunk, index) => {
+                chunksHTML += `
+                    <div class="py-4">
+                        <h4 class="font-medium text-white">Chunk ${index + 1}</h4>
+                        <p class="mt-1 text-sm text-slate-300">${chunk}</p>
+                    </div>
+                `;
+            });
+            
+            chunksContainer.innerHTML = chunksHTML;
+        }
+        
+        // Render entities
+        function renderEntities(nodes) {
+            const entitiesTbody = document.getElementById('entities-tbody');
+            
+            if (nodes.length === 0) {
+                entitiesTbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-8">No entities found for this document</td></tr>';
+                return;
+            }
+            
+            let entitiesHTML = '';
+            
+            nodes.forEach(node => {
+                // Skip document nodes
+                if (node.group === 'Document') return;
+                
+                const properties = { ...node.properties };
+                delete properties.displayName;
+                delete properties.primaryLabel;
+                delete properties.name;
+                
+                entitiesHTML += `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-400">${node.id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-200">${node.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-${getEntityColor(node.group)}-900 text-${getEntityColor(node.group)}-300">
+                                ${node.group}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-400">${properties.chunk_index !== undefined ? `Chunk ${parseInt(properties.chunk_index) + 1}` : 'N/A'}</td>
+                        <td class="px-6 py-4 text-sm text-slate-400">
+                            <details>
+                                <summary class="cursor-pointer hover:text-slate-200">View Properties</summary>
+                                <pre class="mt-2 bg-slate-900 p-2 rounded">${JSON.stringify(properties, null, 2)}</pre>
+                            </details>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            if (entitiesHTML === '') {
+                entitiesTbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-8">No entities found for this document</td></tr>';
+            } else {
+                entitiesTbody.innerHTML = entitiesHTML;
+            }
+        }
+        
+        // Render relationships
+        function renderRelationships(links, nodes) {
+            const relationshipsTbody = document.getElementById('relationships-tbody');
+            
+            if (links.length === 0) {
+                relationshipsTbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-8">No relationships found for this document</td></tr>';
+                return;
+            }
+            
+            // Create a map of node IDs to nodes for quick lookups
+            const nodeMap = {};
+            nodes.forEach(node => {
+                nodeMap[node.id] = node;
+            });
+            
+            let relationshipsHTML = '';
+            
+            links.forEach(link => {
+                const sourceNode = nodeMap[link.source] || { name: link.source, group: 'Unknown' };
+                const targetNode = nodeMap[link.target] || { name: link.target, group: 'Unknown' };
+                const properties = { ...link.properties };
+                
+                relationshipsHTML += `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <span class="inline-block w-2 h-2 mr-2 rounded-full bg-${getEntityColor(sourceNode.group)}-500"></span>
+                                <span class="text-sm font-medium text-slate-200">${sourceNode.name}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-700 text-slate-300">
+                                ${link.type || link.label}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <span class="inline-block w-2 h-2 mr-2 rounded-full bg-${getEntityColor(targetNode.group)}-500"></span>
+                                <span class="text-sm font-medium text-slate-200">${targetNode.name}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-400">${properties.chunk_index !== undefined ? `Chunk ${parseInt(properties.chunk_index) + 1}` : 'N/A'}</td>
+                        <td class="px-6 py-4 text-sm text-slate-400">
+                            <details>
+                                <summary class="cursor-pointer hover:text-slate-200">View Properties</summary>
+                                <pre class="mt-2 bg-slate-900 p-2 rounded">${JSON.stringify(properties, null, 2)}</pre>
+                            </details>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            relationshipsTbody.innerHTML = relationshipsHTML;
+        }
+        
+        // Reset error debugging tab
+        function resetErrorDebugging() {
+            // Reset document status
+            document.getElementById('doc-status-indicator').className = 'w-4 h-4 rounded-full bg-slate-600';
+            document.getElementById('doc-status-text').textContent = 'Loading document status...';
+            document.getElementById('doc-status-details').textContent = '';
+            
+            // Reset component status
+            const components = [
+                'extraction', 'splitting', 'embedding', 'indexing', 
+                'graph-extract', 'neo4j'
+            ];
+            
+            components.forEach(component => {
+                // Reset status indicator
+                document.getElementById(`${component}-status-indicator`).className = 'w-3 h-3 rounded-full bg-slate-600';
+                document.getElementById(`${component}-status-text`).textContent = 'Not started';
+                
+                // Hide error message
+                const errorElement = document.getElementById(`${component}-error`);
+                errorElement.classList.add('hidden');
+                errorElement.textContent = '';
+            });
+            
+            // Reset error details
+            document.getElementById('error-details-container').innerHTML = 
+                '<div class="text-center text-slate-400 py-4">Loading error information...</div>';
+        }
+        
+        // Update error debugging tab based on document logs
+        function updateErrorDebugging(data) {
+            const logs = data.logs || [];
+            if (!logs.length) {
+                document.getElementById('error-details-container').innerHTML = 
+                    '<div class="text-center text-slate-400 py-4">No logs available for this document</div>';
+                return;
+            }
+            
+            // Update document status
+            updateDocumentStatus(data);
+            
+            // Update component status
+            updateComponentStatus(logs);
+            
+            // Update error details
+            updateErrorDetails(logs);
+        }
+        
+        // Update document status card
+        function updateDocumentStatus(data) {
+            const statusIndicator = document.getElementById('doc-status-indicator');
+            const statusText = document.getElementById('doc-status-text');
+            const statusDetails = document.getElementById('doc-status-details');
+            
+            // Set status color based on document status
+            let statusColor = 'bg-slate-500';
+            let statusMessage = data.status || 'Unknown';
+            
+            if (statusMessage.toLowerCase().includes('error') || statusMessage.toLowerCase().includes('fail')) {
+                statusColor = 'bg-red-500';
+            } else if (statusMessage.toLowerCase().includes('process') || statusMessage.toLowerCase().includes('progress')) {
+                statusColor = 'bg-yellow-500';
+            } else if (statusMessage.toLowerCase().includes('complete') || statusMessage.toLowerCase().includes('success')) {
+                statusColor = 'bg-green-500';
+            } else if (statusMessage.toLowerCase().includes('upload') || statusMessage.toLowerCase().includes('new')) {
+                statusColor = 'bg-blue-500';
+            }
+            
+            statusIndicator.className = `w-4 h-4 rounded-full ${statusColor}`;
+            statusText.textContent = `Status: ${statusMessage}`;
+            
+            // Add document details
+            const details = [
+                `Document ID: ${data.document_id}`,
+                `Name: ${data.document_name}`
+            ];
+            
+            statusDetails.textContent = details.join(' | ');
+        }
+        
+        // Update component status cards
+        function updateComponentStatus(logs) {
+            // Define the mapping between pipeline stages and component IDs
+            const stageComponentMap = {
+                'text_extraction': 'extraction',
+                'text_splitting': 'splitting',
+                'embedding_generation': 'embedding',
+                'vector_indexing': 'indexing',
+                'graph_extraction': 'graph-extract',
+                'neo4j_store_graph': 'neo4j'
+            };
+            
+            // Store latest status for each stage
+            const latestStatusByStage = {};
+            const errorsByStage = {};
+            
+            // Process all logs to find the latest status for each stage
+            logs.forEach(log => {
+                const stage = log.stage;
+                const component = stageComponentMap[stage];
+                
+                // Skip if no matching component
+                if (!component) return;
+                
+                // Track latest status
+                if (!latestStatusByStage[stage] || log.timestamp > latestStatusByStage[stage].timestamp) {
+                    latestStatusByStage[stage] = log;
+                }
+                
+                // Track errors
+                if (log.status === 'error') {
+                    if (!errorsByStage[stage]) {
+                        errorsByStage[stage] = [];
+                    }
+                    errorsByStage[stage].push(log);
+                }
+            });
+            
+            // Update UI for each component
+            Object.entries(stageComponentMap).forEach(([stage, component]) => {
+                const statusLog = latestStatusByStage[stage];
+                const errors = errorsByStage[stage] || [];
+                
+                // Skip if no log for this stage
+                if (!statusLog) return;
+                
+                const indicator = document.getElementById(`${component}-status-indicator`);
+                const statusText = document.getElementById(`${component}-status-text`);
+                const errorElement = document.getElementById(`${component}-error`);
+                
+                // Set status color and text
+                let statusColor = 'bg-slate-600';
+                let message = 'Not started';
+                
+                if (statusLog.status === 'completed' || statusLog.status === 'success') {
+                    statusColor = 'bg-green-500';
+                    message = 'Completed';
+                } else if (statusLog.status === 'error') {
+                    statusColor = 'bg-red-500';
+                    message = 'Error';
+                } else if (statusLog.status === 'started') {
+                    statusColor = 'bg-blue-500';
+                    message = 'Started';
+                } else if (statusLog.status.includes('progress')) {
+                    statusColor = 'bg-yellow-500';
+                    message = 'In Progress';
+                }
+                
+                indicator.className = `w-3 h-3 rounded-full ${statusColor}`;
+                statusText.textContent = message;
+                
+                // Display error if any
+                if (errors.length > 0) {
+                    const latestError = errors[errors.length - 1];
+                    errorElement.textContent = latestError.details?.message || 'Error occurred';
+                    errorElement.classList.remove('hidden');
+                } else {
+                    errorElement.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Update error details section
+        function updateErrorDetails(logs) {
+            const detailsContainer = document.getElementById('error-details-container');
+            
+            // Find all error logs
+            const errorLogs = logs.filter(log => log.status === 'error');
+            
+            if (errorLogs.length === 0) {
+                // Check for any incomplete stages
+                const incompleteStages = findIncompleteStages(logs);
+                
+                if (incompleteStages.length > 0) {
+                    let warningHTML = `
+                        <div class="bg-yellow-900 border-l-4 border-yellow-500 p-4 mb-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm text-yellow-300">
+                                        <strong>Warning:</strong> The following pipeline stages started but did not complete:
+                                    </p>
+                                    <ul class="mt-2 text-sm text-yellow-300 list-disc pl-5">
+                                        ${incompleteStages.map(stage => `<li>${formatStage(stage)}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    detailsContainer.innerHTML = warningHTML;
+                } else {
+                    detailsContainer.innerHTML = '<div class="text-center text-slate-400 py-4">No errors detected</div>';
+                }
+            } else {
+                // Display error details
+                let errorHTML = '<div class="space-y-4">';
+                
+                errorLogs.forEach(log => {
+                    const timestamp = new Date(log.timestamp).toLocaleString();
+                    const stage = formatStage(log.stage);
+                    const message = log.details?.message || 'Unknown error';
+                    const stackTrace = log.details?.stack_trace || '';
+                    
+                    errorHTML += `
+                        <div class="bg-red-900 border-l-4 border-red-500 p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-300">Error in ${stage}</h3>
+                                    <div class="mt-1 text-sm text-red-400">
+                                        <p>${message}</p>
+                                        <p class="mt-1 text-xs text-slate-400">${timestamp}</p>
+                                        
+                                        ${stackTrace ? `
+                                            <details class="mt-2">
+                                                <summary class="cursor-pointer text-xs text-slate-300">Stack Trace</summary>
+                                                <pre class="mt-1 text-xs overflow-x-auto bg-slate-900 p-2 rounded">${stackTrace}</pre>
+                                            </details>
+                                        ` : ''}
+                                        
+                                        ${log.details && Object.keys(log.details).length > 0 ? `
+                                            <details class="mt-2">
+                                                <summary class="cursor-pointer text-xs text-slate-300">Details</summary>
+                                                <pre class="mt-1 text-xs overflow-x-auto bg-slate-900 p-2 rounded">${JSON.stringify(log.details, null, 2)}</pre>
+                                            </details>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                errorHTML += '</div>';
+                detailsContainer.innerHTML = errorHTML;
+            }
+        }
+        
+        // Find incomplete stages (started but not completed)
+        function findIncompleteStages(logs) {
+            const stages = {};
+            
+            // Process all logs to find started and completed stages
+            logs.forEach(log => {
+                const stage = log.stage;
+                
+                // Skip system logs
+                if (stage === 'system' || stage === 'document_status') return;
+                
+                if (!stages[stage]) {
+                    stages[stage] = { started: false, completed: false };
+                }
+                
+                if (log.status === 'started') {
+                    stages[stage].started = true;
+                } else if (log.status === 'completed' || log.status === 'success') {
+                    stages[stage].completed = true;
+                }
+            });
+            
+            // Find stages that started but didn't complete
+            return Object.entries(stages)
+                .filter(([_, status]) => status.started && !status.completed)
+                .map(([stage, _]) => stage);
+        }
+        
+        // Helper function to format stage names
+        function formatStage(stage) {
+            return stage.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+        
+        // Helper function to get color for entity type
+        function getEntityColor(entityType) {
+            const colorMap = {
+                'Person': 'pink',
+                'Organization': 'blue',
+                'Location': 'green',
+                'Date': 'orange',
+                'Concept': 'purple',
+                'Event': 'red',
+                'Topic': 'cyan',
+                'Product': 'yellow',
+                'Technology': 'slate',
+                'Document': 'amber'
+            };
+            
+            return colorMap[entityType] || 'slate';
+        }
+        
+        // Graph visualization with D3.js
+        let graphNetwork = null;  // Store the network instance
+        
+        function renderGraphVisualization(graphData) {
+            // Make sure vis.js is loaded
+            if (typeof vis === 'undefined') {
+                // Load vis.js dynamically if needed
+                loadVisJS(function() {
+                    initializeGraphVisualization(graphData);
+                });
+            } else {
+                initializeGraphVisualization(graphData);
+            }
+        }
+        
+        function loadVisJS(callback) {
+            // Show loading indication
+            document.getElementById('graph-loading').classList.remove('hidden');
+            
+            // Load vis.js script
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
+            script.onload = callback;
+            script.onerror = function() {
+                document.getElementById('graph-loading').classList.add('hidden');
+                document.getElementById('graph-error').classList.remove('hidden');
+                document.getElementById('graph-error-message').textContent = 'Failed to load visualization library';
+            };
+            document.head.appendChild(script);
+            
+            // Load vis.js CSS
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/vis-network/styles/vis-network.min.css';
+            document.head.appendChild(link);
+        }
+        
+        function initializeGraphVisualization(graphData) {
+            try {
+                // Get container
+                const container = document.getElementById('graph-container');
+                
+                // Hide loading spinner
+                document.getElementById('graph-loading').classList.add('hidden');
+                
+                // Check if we have graph data
+                if (!graphData || !graphData.nodes || !graphData.links || 
+                    (graphData.nodes.length === 0 && graphData.links.length === 0)) {
+                    // Show no data message
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-full">
+                            <svg class="h-12 w-12 text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p class="text-slate-400">No graph data available for this document</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Format data for vis.js
+                const nodes = new vis.DataSet(
+                    graphData.nodes.map(node => {
+                        // Determine color based on node type
+                        const colorName = getEntityColor(node.group);
+                        const color = {
+                            background: getNodeColor(colorName),
+                            border: getBorderColor(colorName),
+                            highlight: { background: getHighlightColor(colorName) }
+                        };
+                        
+                        return {
+                            id: node.id,
+                            label: node.name,
+                            title: `${node.group}: ${node.name}`,
+                            group: node.group,
+                            properties: node.properties || {},
+                            color: color,
+                            font: { color: getFontColor(node.group) },
+                            shape: getNodeShape(node.group)
+                        };
+                    })
+                );
+                
+                const edges = new vis.DataSet(
+                    graphData.links.map((link, index) => {
+                        return {
+                            id: index,
+                            from: link.source,
+                            to: link.target,
+                            label: link.type,
+                            title: link.type,
+                            arrows: 'to',
+                            color: { color: '#94a3b8', highlight: '#818cf8' },
+                            properties: link.properties || {}
+                        };
+                    })
+                );
+                
+                // Create a network
+                const data = { nodes, edges };
+                
+                // Configure options
+                const options = {
+                    nodes: {
+                        shape: 'dot',
+                        size: 20,
+                        font: {
+                            size: 12,
+                            face: 'Arial',
+                            color: '#e2e8f0'
+                        },
+                        borderWidth: 2,
+                        shadow: true
+                    },
+                    edges: {
+                        width: 1.5,
+                        shadow: true,
+                        smooth: { type: 'continuous' },
+                        font: {
+                            size: 10,
+                            face: 'Arial',
+                            background: '#1e293b',
+                            color: '#e2e8f0',
+                            strokeWidth: 0,
+                            align: 'middle'
+                        }
+                    },
+                    physics: {
+                        stabilization: true,
+                        barnesHut: {
+                            gravitationalConstant: -2000,
+                            centralGravity: 0.1,
+                            springLength: 95,
+                            springConstant: 0.04,
+                            damping: 0.09
+                        }
+                    },
+                    interaction: {
+                        navigationButtons: true,
+                        keyboard: true,
+                        hover: true
+                    }
+                };
+                
+                // Clear previous network if it exists
+                if (graphNetwork) {
+                    graphNetwork.destroy();
+                }
+                
+                // Create the new network
+                graphNetwork = new vis.Network(container, data, options);
+                
+                // Add event listeners for node/edge selection
+                graphNetwork.on("selectNode", function(params) {
+                    const nodeId = params.nodes[0];
+                    const node = nodes.get(nodeId);
+                    showNodeDetails(node);
+                });
+                
+                graphNetwork.on("deselectNode", function() {
+                    hideNodeDetails();
+                });
+                
+                // Add event listeners for buttons
+                document.getElementById('zoom-in-btn').addEventListener('click', function() {
+                    graphNetwork.zoomIn(0.2);
+                });
+                
+                document.getElementById('zoom-out-btn').addEventListener('click', function() {
+                    graphNetwork.zoomOut(0.2);
+                });
+                
+                document.getElementById('fit-view-btn').addEventListener('click', function() {
+                    graphNetwork.fit();
+                });
+                
+                document.getElementById('reload-graph-btn').addEventListener('click', function() {
+                    const documentId = documentSelect.value;
+                    if (!documentId) return;
+                    
+                    fetch(`/api/dochub/graph/document/${documentId}/`)
+                        .then(response => response.json())
+                        .then(data => {
+                            renderGraphVisualization(data);
+                        })
+                        .catch(error => {
+                            console.error("Error reloading graph:", error);
+                            document.getElementById('graph-error').classList.remove('hidden');
+                            document.getElementById('graph-error-message').textContent = 'Failed to reload graph data';
+                        });
+                });
+                
+                document.getElementById('retry-graph-btn').addEventListener('click', function() {
+                    document.getElementById('graph-error').classList.add('hidden');
+                    document.getElementById('reload-graph-btn').click();
+                });
+                
+                document.getElementById('close-node-details').addEventListener('click', function() {
+                    hideNodeDetails();
+                    graphNetwork.unselectAll();
+                });
+                
+            } catch (error) {
+                console.error("Error rendering graph:", error);
+                document.getElementById('graph-loading').classList.add('hidden');
+                document.getElementById('graph-error').classList.remove('hidden');
+                document.getElementById('graph-error-message').textContent = 'Error rendering graph: ' + error.message;
+            }
+        }
+        
+        function showNodeDetails(node) {
+            const panel = document.getElementById('node-details-panel');
+            const title = document.getElementById('node-details-title');
+            const content = document.getElementById('node-details-content');
+            
+            // Set panel title
+            title.textContent = `${node.group}: ${node.label}`;
+            
+            // Create content
+            let contentHTML = `
+                <div class="grid grid-cols-2 gap-2 mb-4">
+                    <div class="text-sm text-slate-400">Type:</div>
+                    <div class="text-sm font-medium">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${getEntityColor(node.group)}-900 text-${getEntityColor(node.group)}-300">
+                            ${node.group}
+                        </span>
+                    </div>
+                    <div class="text-sm text-slate-400">ID:</div>
+                    <div class="text-sm font-medium overflow-auto text-slate-300">${node.id}</div>
+                </div>
+            `;
+            
+            // Add properties section
+            if (node.properties && Object.keys(node.properties).length > 0) {
+                contentHTML += `
+                    <div class="border-t border-slate-700 pt-4">
+                        <h5 class="text-sm font-medium text-slate-300 mb-2">Properties</h5>
+                        <div class="bg-slate-900 p-2 rounded text-xs overflow-auto" style="max-height: 200px;">
+                            <pre>${JSON.stringify(node.properties, null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Add buttons for entity-specific actions
+            if (node.group === 'Document') {
+                contentHTML += `
+                    <div class="mt-4 flex space-x-2">
+                        <a href="/api/dochub/documents/${node.id}/chunks/" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded" target="_blank">
+                            View Chunks
+                        </a>
+                    </div>
+                `;
+            } else if (node.group !== 'Error') {
+                contentHTML += `
+                    <div class="mt-4 flex space-x-2">
+                        <a href="/api/dochub/graph/entity/?name=${encodeURIComponent(node.label)}&type=${encodeURIComponent(node.group)}" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded" target="_blank">
+                            View Entity Graph
+                        </a>
+                    </div>
+                `;
+            }
+            
+            // Update content
+            content.innerHTML = contentHTML;
+            
+            // Show panel
+            panel.classList.remove('hidden');
+        }
+        
+        function hideNodeDetails() {
+            document.getElementById('node-details-panel').classList.add('hidden');
+        }
+        
+        function getNodeColor(colorName) {
+            const colorMap = {
+                'pink': '#be185d',
+                'blue': '#1e40af',
+                'green': '#166534',
+                'orange': '#9a3412',
+                'purple': '#6b21a8',
+                'red': '#b91c1c',
+                'cyan': '#0e7490',
+                'yellow': '#a16207',
+                'slate': '#334155',
+                'amber': '#92400e'
+            };
+            
+            return colorMap[colorName] || '#334155';
+        }
+        
+        function getBorderColor(colorName) {
+            const colorMap = {
+                'pink': '#ec4899',
+                'blue': '#3b82f6',
+                'green': '#10b981',
+                'orange': '#f59e0b',
+                'purple': '#8b5cf6',
+                'red': '#ef4444',
+                'cyan': '#06b6d4',
+                'yellow': '#f59e0b',
+                'slate': '#64748b',
+                'amber': '#f59e0b'
+            };
+            
+            return colorMap[colorName] || '#64748b';
+        }
+        
+        function getHighlightColor(colorName) {
+            const colorMap = {
+                'pink': '#db2777',
+                'blue': '#2563eb',
+                'green': '#059669',
+                'orange': '#d97706',
+                'purple': '#7c3aed',
+                'red': '#dc2626',
+                'cyan': '#0891b2',
+                'yellow': '#d97706',
+                'slate': '#475569',
+                'amber': '#d97706'
+            };
+            
+            return colorMap[colorName] || '#475569';
+        }
+        
+        function getFontColor(nodeType) {
+            return '#e2e8f0';
+        }
+        
+        function getNodeShape(nodeType) {
+            if (nodeType === 'Document') return 'box';
+            if (nodeType === 'Error') return 'triangle';
+            if (nodeType === 'Folder') return 'database';
+            return 'dot';
+        }
+    </script>
+</body>
+</html>
